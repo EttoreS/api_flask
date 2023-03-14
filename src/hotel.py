@@ -35,57 +35,64 @@ hoteis = [
 class Hoteis(Resource):
 
     def get(self):
-        return {'hoteis': hoteis}
+        return {'hoteis': [hotel.json() for hotel in HotelModel.query.all()]}
 
 class Hotel(Resource):
 
     args = reqparse.RequestParser()
-    args.add_argument('nome')
-    args.add_argument('estrelas')
-    args.add_argument('diaria')
-    args.add_argument('cidade')
-
-    def find_hotel(hotel_id):
-        for hotel in hoteis:
-            if(hotel['hotel_id'] == hotel_id):
-                return hotel
-        return None
-             
+    args.add_argument('nome', type=str, required=True, help='This fild cannot be blank')
+    args.add_argument('estrelas', type=float, required=True, help='This fild cannot be blank')
+    args.add_argument('diaria', type=float, required=True, help='This fild cannot be blank')
+    args.add_argument('cidade', type=str, required=True, help='This fild cannot be blank')
+            
     def get(self, hotel_id):
-        hotel = Hotel.find_hotel(hotel_id)
+        hotel = HotelModel.find_hotel(hotel_id)
         if hotel:
-            return hotel
+            return hotel.json()
+        
         return {'message':'Hotel not found.'},404
 
     def post(self, hotel_id):
+
+        if(HotelModel.find_hotel(hotel_id)):
+            return {'message': f'Hotel ID {hotel_id} already exists.'}, 400
         
         dados = Hotel.args.parse_args()
+        hotel = HotelModel(hotel_id, **dados) #conseito *args **kwargs
+        try:
+            hotel.save_hotel()
+        except:
+            return {'message':'An error ocurrent trying to save dada.'}, 500
+        return hotel.json()
 
-        hotel_objetio = HotelModel(hotel_id, **dados) #conseito *args **kwargs
-        new_hotel = hotel_objetio.json()
-
-        hoteis.append(new_hotel)
-
-        return new_hotel, 200
 
     def put(self, hotel_id):
-
         dados = Hotel.args.parse_args()
 
-        hotel_objetio = HotelModel(hotel_id, **dados) #conseito *args **kwargs
-        new_hotel = hotel_objetio.json()
+        finded_hotel = HotelModel.find_hotel(hotel_id)
 
-        hotel = Hotel.find_hotel(hotel_id)
-        if hotel:
-            hotel.update(new_hotel)
-            return new_hotel, 200
+        if finded_hotel:
+            finded_hotel.update_hotel(**dados)
+            finded_hotel.save_hotel()
+            return finded_hotel.json(), 200
 
-        hoteis.append(new_hotel)
+        hotel = HotelModel(hotel_id, **dados) #conseito *args **kwargs
 
-        return new_hotel, 201 # created
+        try:
+            hotel.save_hotel()
+        except:
+            return {'message':'An error ocurrent trying to save dada.'}, 500
+
+        return hotel.json(), 201 # created
 
     def delete(self, hotel_id):
 
-        global hoteis
-        hoteis = [hotel for hotel in hoteis if hotel['hotel_id'] != hotel_id]
-        return {'massage': 'Hotel deleted.'}
+        hotel = HotelModel.find_hotel(hotel_id)
+        if hotel:
+            try:
+                hotel.delete_hotel()
+            except:
+                return {'message':'An error ocurrent trying to delete dada.'}, 500
+        
+            return {'massage': 'Hotel deleted.'}
+        return {'massage': 'Hotel not found.'}, 404
